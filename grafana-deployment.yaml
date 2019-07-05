@@ -1,0 +1,104 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+    spec:
+      containers:
+      - image: grafana/grafana:6.2.5
+        name: grafana
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        env:
+        - name: GF_AUTH_BASIC_ENABLED
+          value: "true"
+        - name: GF_USERS_ALLOW_ORG_CREATE
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+          value: Viewer
+        - name: GF_SERVER_ROOT_URL
+          value: /
+        - name: GF_INSTALL_PLUGINS
+          value: grafana-clock-panel
+        resources:
+          requests:
+            cpu: 20m
+            memory: 50Mi
+        volumeMounts:
+          # grafana data
+        - name: data
+          mountPath: /var/lib/grafana
+          subPath: grafana
+          # grafana ini
+        # - mountPath: /etc/grafana/
+        #   name: config-volume
+          # datasource config
+        - name: config-datasource-yml
+          mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+          subPath: datasources.yaml
+          # dashboard config
+        - name: config-dashboard-yml
+          mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+          subPath: dashboards.yaml
+          # dashboards 
+        - name: dashboard-nginx-json
+          mountPath: /var/lib/grafana/dashboards/nginx-dashboard.json
+          subPath: nginx-dashboard.json
+        - name: dashboard-cluster-json
+          mountPath: /var/lib/grafana/dashboards/counterman-dashboard.json
+          subPath: clustermon-dashboard.json
+
+      volumes:
+      - emptyDir: {}
+        name: data
+      # - name: config-volume
+      #   configMap:
+      #     name: grafana-conf
+      - name: config-datasource-yml
+        configMap:
+          name: datasource-config
+      - name: config-dashboard-yml
+        configMap:
+          name: dashboard-config
+      - name: dashboard-nginx-json
+        configMap:
+          name: nginx-dashboard
+      - name: dashboard-cluster-json
+        configMap:
+          name: clustermon-dashboard
+      - name: dashboard-node-json
+        configMap:
+          name: nodemon-dashboard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+spec:
+  ports:
+  - port: 3000
+    protocol: TCP
+    targetPort: 3000
+    nodePort: 30030
+  selector:
+    app.kubernetes.io/name: grafana
+  type: NodePort
